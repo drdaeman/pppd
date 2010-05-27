@@ -151,6 +151,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <netdb.h>
@@ -1064,7 +1065,9 @@ endswitch:
     return (rc);			/* Return final code */
 }
 
-
+#if defined(SOL2) || defined(__linux__)
+int ether_to_eui64(eui64_t *p_eui64);
+#endif
 /*
  * ipv6_check_options - check that any IP-related options are OK,
  * and assign appropriate defaults.
