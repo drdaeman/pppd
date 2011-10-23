@@ -132,6 +132,7 @@ PPPOEConnectDevice(void)
     struct sockaddr_pppox sp;
     struct ifreq ifr;
     int s;
+    char mac_address[18];
 
     /* Restore configuration */
     lcp_allowoptions[0].mru = conn->mtu;
@@ -196,24 +197,17 @@ PPPOEConnectDevice(void)
     memcpy(sp.sa_addr.pppoe.remote, conn->peerEth, ETH_ALEN);
 
     /* Set remote_number for ServPoET */
-    sprintf(remote_number, "%02X:%02X:%02X:%02X:%02X:%02X",
+    sprintf(mac_address, "%02X:%02X:%02X:%02X:%02X:%02X",
 	    (unsigned) conn->peerEth[0],
 	    (unsigned) conn->peerEth[1],
 	    (unsigned) conn->peerEth[2],
 	    (unsigned) conn->peerEth[3],
 	    (unsigned) conn->peerEth[4],
 	    (unsigned) conn->peerEth[5]);
+    sprintf(remote_number, "%s@%s", mac_address, conn->ifName);
 
-    warn("Connected to %02X:%02X:%02X:%02X:%02X:%02X via interface %s",
-	 (unsigned) conn->peerEth[0],
-	 (unsigned) conn->peerEth[1],
-	 (unsigned) conn->peerEth[2],
-	 (unsigned) conn->peerEth[3],
-	 (unsigned) conn->peerEth[4],
-	 (unsigned) conn->peerEth[5],
-	 conn->ifName);
-
-    script_setenv("MACREMOTE", remote_number, 0);
+    warn("Connected to %s via interface %s", mac_address, conn->ifName);
+    script_setenv("MACREMOTE", mac_address, 0);
 
     if (connect(conn->sessionSocket, (struct sockaddr *) &sp,
 		sizeof(struct sockaddr_pppox)) < 0) {
