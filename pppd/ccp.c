@@ -448,11 +448,13 @@ ccp_input(unit, p, len)
 {
     fsm *f = &ccp_fsm[unit];
     int oldstate;
+    bool oldmppe;
 
     /*
      * Check for a terminate-request so we can print a message.
      */
     oldstate = f->state;
+    oldmppe = ccp_gotoptions[unit].mppe;
     fsm_input(f, p, len);
     if (oldstate == OPENED && p[0] == TERMREQ && f->state != OPENED) {
 	notice("Compression disabled by peer.");
@@ -471,6 +473,15 @@ ccp_input(unit, p, len)
     if (oldstate == REQSENT && p[0] == TERMACK
 	&& !ANY_COMPRESS(ccp_gotoptions[unit]))
 	ccp_close(unit, "No compression negotiated");
+
+    /*
+     * Save MPPE state (on/off) on state transition to OPENED
+     * or MPPE state change.
+     */
+    if ((oldstate != OPENED && f->state == OPENED)
+        || (oldmppe != ccp_gotoptions[unit].mppe)) {
+        script_setenv("MPPE", ccp_gotoptions[unit].mppe ? "on" : "off", 0);
+    }
 }
 
 /*
