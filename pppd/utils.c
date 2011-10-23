@@ -159,7 +159,11 @@ vslprintf(buf, buflen, fmt, args)
     int c, i, n;
     int width, prec, fillch;
     int base, len, neg, quoted;
+#ifdef USE_64BIT_STATS
+    unsigned long long val = 0;
+#else
     unsigned long val = 0;
+#endif
     char *str, *f, *buf0;
     unsigned char *p;
     char num[32];
@@ -241,6 +245,22 @@ vslprintf(buf, buflen, fmt, args)
 		continue;
 	    }
 	    break;
+#ifdef USE_64BIT_STATS
+        case 'L':
+            c = *fmt++;
+            switch (c) {
+            case 'u':
+                val = va_arg(args, unsigned long long);
+                base = 10;
+                break;
+	    default:
+		*buf++ = '%'; --buflen;
+		*buf++ = 'L'; --buflen;
+		--fmt;		/* so %lz outputs %lz etc. */
+		continue;
+            }
+            break;
+#endif
 	case 'd':
 	    i = va_arg(args, int);
 	    if (i < 0) {

@@ -1206,7 +1206,11 @@ print_link_stats()
     if (link_stats_valid) {
        int t = (link_connect_time + 5) / 6;    /* 1/10ths of minutes */
        info("Connect time %d.%d minutes.", t/10, t%10);
+#ifdef USE_64BIT_STATS
+       info("Sent %Lu bytes, received %Lu bytes.",
+#else
        info("Sent %u bytes, received %u bytes.",
+#endif
 	    link_stats.bytes_out, link_stats.bytes_in);
        link_stats_valid = 0;
     }
@@ -1247,9 +1251,14 @@ update_link_stats(u)
 
     slprintf(numbuf, sizeof(numbuf), "%u", link_connect_time);
     script_setenv("CONNECT_TIME", numbuf, 0);
+#ifdef USE_64BIT_STATS
+    slprintf(numbuf, sizeof(numbuf), "%Lu", link_stats.bytes_out);
+    slprintf(numbuf, sizeof(numbuf), "%Lu", link_stats.bytes_in);
+#else
     slprintf(numbuf, sizeof(numbuf), "%u", link_stats.bytes_out);
-    script_setenv("BYTES_SENT", numbuf, 0);
     slprintf(numbuf, sizeof(numbuf), "%u", link_stats.bytes_in);
+#endif
+    script_setenv("BYTES_SENT", numbuf, 0);
     script_setenv("BYTES_RCVD", numbuf, 0);
 }
 

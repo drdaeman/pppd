@@ -242,6 +242,20 @@ static int make_ppp_unit(void);
 
 extern u_char	inpacket_buf[];	/* borrowed from main.c */
 
+#ifdef USE_PROCNET_DEV_STATS
+#define _PATH_PROCNET_DEV "/proc/net/dev"
+#endif
+
+#ifdef USE_64BIT_STATS
+#ifndef USE_PROCNET_DEV_STATS
+#warning "USE_64BIT_STATS is set, but USE_PROCNET_DEV_STATS isn't. \
+         I'm making the counters 64-bit, but you won't get the right values, \
+         they'll be 32-bit wrapped."
+#endif
+#else
+#error "Can't use USE_PROCNET_DEV_STATS without USE_64BIT_STATS."
+#endif
+
 /*
  * SET_SA_FAMILY - set the sa_family field of a struct sockaddr,
  * if it exists.
@@ -1352,6 +1366,38 @@ get_idle_time(u, ip)
     return ioctl(ppp_dev_fd, PPPIOCGIDLE, ip) >= 0;
 }
 
+#ifdef USE_PROCNET_DEV_STATS
+char *get_name(char *name, char *p)
+{
+    while (isspace(*p))
+	p++;
+    while (*p) {
+	if (isspace(*p))
+	    break;
+	if (*p == ':') {	/* could be an alias */
+		char *dot = p++;
+ 		while (*p && isdigit(*p)) p++;
+		if (*p == ':') {
+			/* Yes it is, backup and copy it. */
+			p = dot;
+			*name++ = *p++;
+			while (*p && isdigit(*p)) {
+				*name++ = *p++;
+			}
+		} else {
+			/* No, it isn't */
+			p = dot;
+	    }
+	    p++;
+	    break;
+	}
+	*name++ = *p++;
+    }
+    *name++ = '\0';
+    return p;
+}
+#endif
+
 /********************************************************************
  *
  * get_ppp_stats - return statistics for the link.
@@ -1361,6 +1407,58 @@ get_ppp_stats(u, stats)
     int u;
     struct pppd_stats *stats;
 {
+#ifdef USE_PROCNET_DEV_STATS
+    FILE *fh;
+    char buf[512];
+    char *procnetdev_format;
+    int found;
+
+    fh = fopen(_PATH_PROCNET_DEV, "r");
+    if (!fh) {
+        error("Couldn't get PPP statistics: %m");
+        return 0;
+    }
+    fgets(buf, sizeof buf, fh); /* useless header line */
+    fgets(buf, sizeof buf, fh);
+
+    if (strstr(buf, "compressed"))
+        procnetdev_format =
+            "%Lu %Lu %*lu %*lu %*lu %*lu %*lu %*lu"
+            " %Lu %Lu %*lu %*lu %*lu %*lu %*lu %*lu";
+    else if (strstr(buf, "bytes"))
+        procnetdev_format =
+            "%Lu %Lu %*lu %*lu %*lu %*lu %Lu %Lu %*lu %*lu %*lu %*lu %*lu";
+    else {
+        error("Couldn't get PPP statistics: %s format is too old.",
+              _PATH_PROCNET_DEV);
+        fclose(fh);
+        return 0;
+    }
+
+    found = 0;
+    while (fgets(buf, sizeof buf, fh)) {
+        char *s, name[IFNAMSIZ];
+        s = get_name(name, buf);
+        if (strncmp(name, ifname, IFNAMSIZ) == 0) {
+            /* found our interface */
+            sscanf(s, procnetdev_format,
+                   &stats->bytes_in, &stats->pkts_in,
+                   &stats->bytes_out, &stats->pkts_out);
+            found = 1;
+            break;
+        }
+    }
+    if (ferror(fh)) {
+        error("Couldn't get PPP statistics: %m");
+        found = 0;
+    } else if (found != 1) {
+        error("Couldn't get PPP statistics: can't find entry for %s in %s",
+              ifname, _PATH_PROCNET_DEV);
+        found = 0;
+    }
+    fclose(fh);
+    return found;
+#else
     struct ifpppstatsreq req;
 
     memset (&req, 0, sizeof (req));
@@ -1376,6 +1474,7 @@ get_ppp_stats(u, stats)
     stats->pkts_in = req.stats.p.ppp_ipackets;
     stats->pkts_out = req.stats.p.ppp_opackets;
     return 1;
+#endif
 }
 
 /********************************************************************

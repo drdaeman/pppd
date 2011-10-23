@@ -22,6 +22,8 @@ MPPE=y
 # Uncomment the next lint to include support for traffic limiting
 MAXOCTETS=y
 
+USE_64BIT_STATS=y
+
 ifdef CHAPMS
 CFLAGS += -DCHAPMS=1
 ifdef MPPE
@@ -30,6 +32,9 @@ endif
 endif
 ifdef MAXOCTETS
 CFLAGS += -DMAXOCTETS=1
+endif
+ifdef USE_64BIT_STATS
+CFLAGS += -DUSE_64BIT_STATS=1
 endif
 
 all: $(PLUGIN)

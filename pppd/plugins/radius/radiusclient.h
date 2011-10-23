@@ -167,6 +167,8 @@ typedef struct pw_auth_hdr
 #define PW_ACCT_TERMINATE_CAUSE		49	/* integer */
 #define PW_ACCT_MULTI_SESSION_ID	50	/* string */
 #define PW_ACCT_LINK_COUNT		51	/* integer */
+#define	PW_ACCT_INPUT_GIGAWORDS		52	/* integer */
+#define	PW_ACCT_OUTPUT_GIGAWORDS	53	/* integer */
 
 /* From RFC 2869 */
 #define PW_ACCT_INTERIM_INTERVAL        85	/* integer */

@@ -1141,7 +1141,11 @@ static void
 check_maxoctets(arg)
     void *arg;
 {
+#ifdef USE_64BIT_STATS
+    unsigned long long used;
+#else
     unsigned int used;
+#endif
 
     update_link_stats(ifunit);
     link_stats_valid=0;
@@ -1162,7 +1166,11 @@ check_maxoctets(arg)
 	    break;
     }
     if (used > maxoctets) {
+#ifdef USE_64BIT_STATS
+	notice("Traffic limit reached. Limit: %Lu Used: %Lu", maxoctets, used);
+#else
 	notice("Traffic limit reached. Limit: %u Used: %u", maxoctets, used);
+#endif
 	status = EXIT_TRAFFIC_LIMIT;
 	lcp_close(0, "Traffic limit");
 	need_holdoff = 0;

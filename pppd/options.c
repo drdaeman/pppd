@@ -122,7 +122,11 @@ int	child_wait = 5;		/* # seconds to wait for children at exit */
 struct userenv *userenv_list;	/* user environment variables */
 
 #ifdef MAXOCTETS
+#ifdef USE_64BIT_STATS 
+unsigned long long maxoctets = 0;    /* default - no limit */
+#else
 unsigned int  maxoctets = 0;    /* default - no limit */
+#endif
 int maxoctets_dir = 0;       /* default - sum of traffic */
 int maxoctets_timeout = 1;   /* default 1 second */ 
 #endif
@@ -323,7 +327,11 @@ option_t general_options[] = {
 #endif
 
 #ifdef MAXOCTETS
+#ifdef USE_64BIT_STATS
+    { "maxoctets", o_longlong, &maxoctets,
+#else
     { "maxoctets", o_int, &maxoctets,
+#endif
       "Set connection traffic limit",
       OPT_PRIO | OPT_LLIMIT | OPT_NOINCR | OPT_ZEROINF },
     { "mo", o_int, &maxoctets,
@@ -753,6 +761,53 @@ process_option(opt, cmd, argv)
 	if (opt->addr2 && (opt->flags & OPT_A2COPY))
 	    *(int *)(opt->addr2) = iv;
 	break;
+
+#ifdef USE_64BIT_STATS
+    case o_longlong:
+	iv = 0;
+	if ((opt->flags & OPT_NOARG) == 0) {
+	    if (!int_option(*argv, &iv))
+		return 0;
+	    if ((((opt->flags & OPT_LLIMIT) && iv < opt->lower_limit)
+		 || ((opt->flags & OPT_ULIMIT) && iv > opt->upper_limit))
+		&& !((opt->flags & OPT_ZEROOK && iv == 0))) {
+		char *zok = (opt->flags & OPT_ZEROOK)? " zero or": "";
+		switch (opt->flags & OPT_LIMITS) {
+		case OPT_LLIMIT:
+		    option_error("%s value must be%s >= %d",
+				 opt->name, zok, opt->lower_limit);
+		    break;
+		case OPT_ULIMIT:
+		    option_error("%s value must be%s <= %d",
+				 opt->name, zok, opt->upper_limit);
+		    break;
+		case OPT_LIMITS:
+		    option_error("%s value must be%s between %d and %d",
+				opt->name, zok, opt->lower_limit, opt->upper_limit);
+		    break;
+		}
+		return 0;
+	    }
+	}
+	a = opt->flags & OPT_VALUE;
+	if (a >= 128)
+	    a -= 256;		/* sign extend */
+	iv += a;
+	if (opt->flags & OPT_INC)
+	    iv += *(long long *)(opt->addr);
+	if ((opt->flags & OPT_NOINCR) && !privileged_option) {
+	    int oldv = *(long long *)(opt->addr);
+	    if ((opt->flags & OPT_ZEROINF) ?
+		(oldv != 0 && (iv == 0 || iv > oldv)) : (iv > oldv)) {
+		option_error("%s value cannot be increased", opt->name);
+		return 0;
+	    }
+	}
+	*(long long *)(opt->addr) = iv;
+	if (opt->addr2 && (opt->flags & OPT_A2COPY))
+	    *(long long *)(opt->addr2) = iv;
+	break;
+#endif
 
     case o_uint32:
 	if (opt->flags & OPT_NOARG) {

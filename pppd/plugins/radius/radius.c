@@ -587,6 +587,10 @@ radius_setparams(VALUE_PAIR *vp, char *msg, REQUEST_INFO *req_info,
 #ifdef MAXOCTETS
 	    case PW_SESSION_OCTETS_LIMIT:
 		/* Session traffic limit */
+#ifdef USE_64BIT_STATS
+/* Note, that even that we're using 64-bit counters, maxoctets is still 32-bit.
+   There should be some Session-Octets-Limit-Gigawords (or whatever it's called). */
+#endif
 		maxoctets = vp->lvalue;
 		break;
 	    case PW_OCTETS_DIRECTION:
@@ -968,11 +972,19 @@ radius_acct_stop(void)
 	av_type = link_connect_time;
 	rc_avpair_add(&send, PW_ACCT_SESSION_TIME, &av_type, 0, VENDOR_NONE);
 
-	av_type = link_stats.bytes_out;
+	av_type = link_stats.bytes_out % UINT32_MAX;
 	rc_avpair_add(&send, PW_ACCT_OUTPUT_OCTETS, &av_type, 0, VENDOR_NONE);
 
-	av_type = link_stats.bytes_in;
+	av_type = link_stats.bytes_in % UINT32_MAX;
 	rc_avpair_add(&send, PW_ACCT_INPUT_OCTETS, &av_type, 0, VENDOR_NONE);
+
+#ifdef USE_64BIT_STATS
+	av_type = link_stats.bytes_out / UINT32_MAX;
+	rc_avpair_add(&send, PW_ACCT_OUTPUT_GIGAWORDS, &av_type, 0, VENDOR_NONE);
+
+	av_type = link_stats.bytes_in / UINT32_MAX;
+	rc_avpair_add(&send, PW_ACCT_INPUT_GIGAWORDS, &av_type, 0, VENDOR_NONE);
+#endif
 
 	av_type = link_stats.pkts_out;
 	rc_avpair_add(&send, PW_ACCT_OUTPUT_PACKETS, &av_type, 0, VENDOR_NONE);
@@ -1117,6 +1129,14 @@ radius_acct_interim(void *ignored)
 
 	av_type = link_stats.bytes_in;
 	rc_avpair_add(&send, PW_ACCT_INPUT_OCTETS, &av_type, 0, VENDOR_NONE);
+
+#ifdef USE_64BIT_STATS
+	av_type = link_stats.bytes_out / UINT32_MAX;
+	rc_avpair_add(&send, PW_ACCT_OUTPUT_GIGAWORDS, &av_type, 0, VENDOR_NONE);
+
+	av_type = link_stats.bytes_in / UINT32_MAX;
+	rc_avpair_add(&send, PW_ACCT_INPUT_GIGAWORDS, &av_type, 0, VENDOR_NONE);
+#endif
 
 	av_type = link_stats.pkts_out;
 	rc_avpair_add(&send, PW_ACCT_OUTPUT_PACKETS, &av_type, 0, VENDOR_NONE);

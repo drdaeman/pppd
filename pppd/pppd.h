@@ -95,6 +95,9 @@ enum opt_type {
 	o_uint32,
 	o_string,
 	o_wild
+#ifdef USE_64BIT_STATS
+       ,o_longlong
+#endif
 };
 
 typedef struct {
@@ -169,11 +172,16 @@ struct permitted_ip {
  * This structure serves as a common representation for the bits
  * pppd needs.
  */
+#ifdef USE_64BIT_STATS
+#define PPPD_STATS_DATATYPE unsigned long long
+#else
+#define PPPD_STATS_DATATYPE unsigned int
+#endif
 struct pppd_stats {
-    unsigned int	bytes_in;
-    unsigned int	bytes_out;
-    unsigned int	pkts_in;
-    unsigned int	pkts_out;
+    PPPD_STATS_DATATYPE	bytes_in;
+    PPPD_STATS_DATATYPE	bytes_out;
+    PPPD_STATS_DATATYPE	pkts_in;
+    PPPD_STATS_DATATYPE	pkts_out;
 };
 
 /* Used for storing a sequence of words.  Usually malloced. */
@@ -322,7 +330,11 @@ extern bool	dryrun;		/* check everything, print options, exit */
 extern int	child_wait;	/* # seconds to wait for children at end */
 
 #ifdef MAXOCTETS
+#ifdef USE_64BIT_STATS
+extern unsigned long long maxoctets; /* Maximum octetes per session (in bytes) */
+#else
 extern unsigned int maxoctets;	     /* Maximum octetes per session (in bytes) */
+#endif
 extern int       maxoctets_dir;      /* Direction :
 				      0 - in+out (default)
 				      1 - in 
