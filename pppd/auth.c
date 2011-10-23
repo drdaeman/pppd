@@ -885,7 +885,7 @@ start_networks(unit)
      */
     ecp_required = ecp_gotoptions[unit].required;
     mppe_required = ccp_gotoptions[unit].mppe;
-    if (!ecp_required && !mppe_required)
+    if (!ecp_required && (!mppe_required || allow_mppe_fallback))
 	continue_networks(unit);
 }
 

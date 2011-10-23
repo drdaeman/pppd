@@ -43,6 +43,8 @@ typedef struct ccp_options {
     short method;		/* code for chosen compression method */
 } ccp_options;
 
+bool allow_mppe_fallback;
+
 extern fsm ccp_fsm[];
 extern ccp_options ccp_wantoptions[];
 extern ccp_options ccp_gotoptions[];
