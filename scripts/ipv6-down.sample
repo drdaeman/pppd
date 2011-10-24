@@ -4,28 +4,23 @@
 # interface tty speed local-address remote-address ipparam
 #
 
+PPP_IFACE="$1"
+[ -n "${PPP_IFACE}" ] || exit 0
 
 # Kill the router advertisement daemon on this interface.
-# The killing procedure is copied from RedHat 6.0 initscripts.
 
-DEVICE="$1"
+LOGGER="/usr/bin/logger -t ppp-script -p daemon"
 
-PIDFILE="/var/run/radvd-$DEVICE.pid"
+RADVD_PIDFILE="/var/run/radvd.${PPP_IFACE}.pid"
 
-[ -f "$PIDFILE" ] || exit 0
-
-PID="$(cat "$PIDFILE")"
-if [ "$PID" != "" ]; then
-    if ps h "$PID" >/dev/null 2>&1; then
-	kill -TERM "$PID"
-	usleep 10000
-	if ps h "$PID" >/dev/null 2>&1; then
-	    sleep 1
-	    if ps h "$PID" >/dev/null 2>&1; then
-		kill -KILL "$PID"
-	    fi
-	fi
+if [ -e "${RADVD_PIDFILE}" ]; then
+    PID=$(cat "${RADVD_PIDFILE}")
+    ${LOGGER}.info "Found radvd PID file ${RADVD_PIDFILE} with PID ${PID}"
+    if [ "$(ps -o comm= "${PID}")" = "radvd" ]; then
+        ${LOGGER}.info "Killing radvd at ${PID}"
+        kill "${PID}"
     fi
+    rm -f "${RADVD_PIDFILE}"
 fi
 
-rm -f "$PIDFILE"
+exit 0

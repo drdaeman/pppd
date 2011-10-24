@@ -4,31 +4,41 @@
 # interface tty speed local-address remote-address ipparam
 #
 
+PPP_IFACE="$1"
+[ -n "${PPP_IFACE}" ] || exit 0
 
 # Start router advertisements on this link.
-# Based on radvd 0.5.0 behaviour
 
-DEVICE="$1"
+RADVD="/usr/sbin/radvd"
+LOGGER="/usr/bin/logger -t ppp-script -p daemon"
 
-CFGFILE="/etc/radvd.conf-$DEVICE"
-PIDFILE="/var/run/radvd-$DEVICE.pid"
-EXEFILE="/usr/sbin/radvd"
+RADATTR_FILE="/var/run/radattr.${PPP_IFACE}"
+IPV6PREFIX=$(grep -sm 1 ^Framed-IPv6-Prefix "${RADATTR_FILE}" | awk '{ print $2 }')
 
-if [ -x "$EXEFILE" -a -f "$CFGFILE" ]; then
-    touch "$PIDFILE"
-    if [ ! -f "$PIDFILE" ]; then
-	echo "error: $PIDFILE is not a regular file. Aborting"
-	exit 0
+${LOGGER}.debug "test"
+if [ -n "${IPV6PREFIX}" ]; then
+    RADVD_CONF="/var/run/radvd.${PPP_IFACE}.conf"
+    RADVD_PIDFILE="/var/run/radvd.${PPP_IFACE}.pid"
+
+    ${LOGGER}.info "Will announce prefix ${IPV6PREFIX} on interface ${PPP_IFACE}"
+
+    # Check PID file
+    if [ -e "${RADVD_PIDFILE}" ]; then
+        PID=$(cat "${RADVD_PIDFILE}")
+        ${LOGGER}.notice "Found old radvd PID file ${RADVD_PIDFILE} with PID ${PID}"
+        if [ "$(ps -o comm= "${PID}")" = "radvd" ]; then
+            ${LOGGER}.warning "It seems that radvd ${PID} is still alive. Killing."
+            kill "${PID}"
+        fi
+        rm -f "${RADVD_PIDFILE}"
     fi
 
-    PID="$(cat "$PIDFILE")"
-    if [ -n "$PID" ]; then
-	ps h "$PID" >/dev/null 2>&1 && exit 0
-    fi
+    echo "interface ${PPP_IFACE}" > "${RADVD_CONF}"
+    echo "{ AdvSendAdvert on; MinRtrAdvInterval 5;" >> "${RADVD_CONF}"
+    echo "  MaxRtrAdvInterval 100; UnicastOnly on;" >> "${RADVD_CONF}"
+    echo "  prefix ${IPV6PREFIX} { AdvAutonomous on; }; };"  >> "${RADVD_CONF}"
 
-    # radvd 0.5.0 doesn't write a pid-file so we do it here
-    # enabling debugging keeps radvd in foreground, putting it
-    # on background gives us the PID.
-    "$EXEFILE" -d 1 -C "$CFGFILE" &
-    echo $! >"$PIDFILE"
+    ${RADVD} -C "${RADVD_CONF}" -p "${RADVD_PIDFILE}"
 fi
+
+exit 0
