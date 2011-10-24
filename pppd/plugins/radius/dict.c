@@ -158,6 +158,10 @@ int rc_read_dictionary (char *filename)
 			{
 				type = PW_TYPE_DATE;
 			}
+			else if (strcmp (typestr, "ipv6prefix") == 0)
+			{
+				type = PW_TYPE_IPV6PREFIX;
+			}
 			else
 			{
 				error("rc_read_dictionary: invalid type on line %d of dictionary %s",

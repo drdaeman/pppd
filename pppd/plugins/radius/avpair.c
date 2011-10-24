@@ -59,7 +59,7 @@ VALUE_PAIR *rc_avpair_add (VALUE_PAIR **list, int attrid, void *pval, int len,
 
 int rc_avpair_assign (VALUE_PAIR *vp, void *pval, int len)
 {
-	int	result = -1;
+	int result = -1;
 
 	switch (vp->type)
 	{
@@ -69,17 +69,28 @@ int rc_avpair_assign (VALUE_PAIR *vp, void *pval, int len)
 			    || (len > AUTH_STRING_LEN)) {
 				error("rc_avpair_assign: bad attribute length");
 				return result;
-		    }
+			}
 
 			if (len > 0) {
 				memcpy(vp->strvalue, (char *)pval, len);
 				vp->strvalue[len] = '\0';
 				vp->lvalue = len;
 			} else {
-			strncpy (vp->strvalue, (char *) pval, AUTH_STRING_LEN);
-			vp->lvalue = strlen((char *) pval);
+				strncpy (vp->strvalue, (char *) pval, AUTH_STRING_LEN);
+				vp->lvalue = strlen((char *) pval);
 			}
 
+			result = 0;
+			break;
+
+		case PW_TYPE_IPV6PREFIX:
+			if (len < 4 || len > 20) {
+				error("rc_avpair_assign: bad attribute length");
+				return result;
+			}
+
+			memcpy(vp->strvalue, (char *)pval, len);
+			vp->lvalue = len;
 			result = 0;
 			break;
 
@@ -222,6 +233,7 @@ VALUE_PAIR *rc_avpair_gen (AUTH_HDR *auth)
 			{
 
 			    case PW_TYPE_STRING:
+			    case PW_TYPE_IPV6PREFIX:
 				memcpy (pair->strvalue, (char *) ptr, (size_t) attrlen);
 				pair->strvalue[attrlen] = '\0';
 				pair->lvalue = attrlen;
@@ -317,6 +329,7 @@ static void rc_extract_vendor_specific_attributes(int attrlen,
 	pair->next = NULL;
 	switch (attr->type) {
 	case PW_TYPE_STRING:
+	case PW_TYPE_IPV6PREFIX:
 	    memcpy (pair->strvalue, (char *) ptr, (size_t) vlen);
 	    pair->strvalue[vlen] = '\0';
 	    pair->lvalue = vlen;
@@ -530,6 +543,8 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 	VALUE_PAIR     *link;
 	struct tm      *tm;
 	time_t          timeval;
+	int             r;
+	char           *ptr;
 
 	mode = PARSE_MODE_NAME;
 	while (*buffer != '\n' && *buffer != '\0')
@@ -548,11 +563,7 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 				rc_dict_findattr (attrstr)) == (DICT_ATTR *) NULL)
 			{
 				error("rc_avpair_parse: unknown attribute");
-				if (*first_pair) {
-					rc_avpair_free(*first_pair);
-					*first_pair = (VALUE_PAIR *) NULL;
-				}
-				return (-1);
+				goto rc_avpair_parse_fail;
 			}
 			mode = PARSE_MODE_EQUAL;
 			break;
@@ -566,11 +577,7 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 			else
 			{
 				error("rc_avpair_parse: missing or misplaced equal sign");
-				if (*first_pair) {
-					rc_avpair_free(*first_pair);
-					*first_pair = (VALUE_PAIR *) NULL;
-				}
-				return (-1);
+				goto rc_avpair_parse_fail;
 			}
 			break;
 
@@ -582,11 +589,7 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 							== (VALUE_PAIR *) NULL)
 			{
 				novm("rc_avpair_parse");
-				if (*first_pair) {
-					rc_avpair_free(*first_pair);
-					*first_pair = (VALUE_PAIR *) NULL;
-				}
-				return (-1);
+				goto rc_avpair_parse_fail;
 			}
 			strcpy (pair->name, attr->name);
 			pair->attribute = attr->value;
@@ -612,12 +615,7 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 							== (DICT_VALUE *) NULL)
 					{
 						error("rc_avpair_parse: unknown attribute value: %s", valstr);
-						if (*first_pair) {
-							rc_avpair_free(*first_pair);
-							*first_pair = (VALUE_PAIR *) NULL;
-						}
-						free (pair);
-						return (-1);
+						goto rc_avpair_parse_fail;
 					}
 					else
 					{
@@ -644,14 +642,45 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 #endif	/* TIMELOCAL */
 				break;
 
+			    case PW_TYPE_IPV6PREFIX:
+				pair->lvalue = 18;
+				memset (pair->strvalue, 0, sizeof (pair->strvalue));
+				ptr = strchr (valstr, '/');
+				if (ptr == NULL)
+				{
+					error("rc_avpair_parse: invalid IPv6 prefix value \"%s\"", valstr);
+					goto rc_avpair_parse_fail;
+				}
+				*ptr = '\0';
+				r = 0;
+				if (isdigit (ptr[1]))
+				{
+					r = atoi (&ptr[1]);
+				}
+				if (r < 1 || r > 128)
+				{
+					*ptr = '/';
+					error("rc_avpair_parse: invalid IPv6 prefix value \"%s\"", valstr);
+					goto rc_avpair_parse_fail;
+				}
+				pair->strvalue[1] = r;
+				r = inet_pton (AF_INET6, valstr, &pair->strvalue[2]);
+				*ptr = '/';
+				if (r <= 0)
+				{
+					error("rc_avpair_parse: inet_pton failed on \"%s\"", valstr);
+					goto rc_avpair_parse_fail;
+				}
+				ptr = pair->strvalue + pair->lvalue - 1;
+				while (*ptr == '\0' && ptr > (char *) pair->strvalue) {
+					ptr--;
+					pair->lvalue--;
+				}
+				break;
+
 			    default:
 				error("rc_avpair_parse: unknown attribute type %d", pair->type);
-				if (*first_pair) {
-					rc_avpair_free(*first_pair);
-					*first_pair = (VALUE_PAIR *) NULL;
-				}
-				free (pair);
-				return (-1);
+				goto rc_avpair_parse_fail;
 			}
 			pair->next = (VALUE_PAIR *) NULL;
 
@@ -678,6 +707,15 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 		}
 	}
 	return (0);
+
+rc_avpair_parse_fail:
+	error("rc_avpair_parse: failing");
+	if (*first_pair) {
+		rc_avpair_free(*first_pair);
+		*first_pair = (VALUE_PAIR *) NULL;
+	}
+	free (pair);
+	return (-1);
 }
 
 /*
@@ -692,8 +730,9 @@ int rc_avpair_parse (char *buffer, VALUE_PAIR **first_pair)
 int rc_avpair_tostr (VALUE_PAIR *pair, char *name, int ln, char *value, int lv)
 {
 	DICT_VALUE     *dval;
-	char            buffer[32];
+	char            buffer[48];
 	struct in_addr  inad;
+	struct in6_addr in6ad;
 	unsigned char         *ptr;
 
 	*name = *value = '\0';
@@ -751,6 +790,30 @@ int rc_avpair_tostr (VALUE_PAIR *pair, char *name, int ln, char *value, int lv)
 		strftime (buffer, sizeof (buffer), "%m/%d/%y %H:%M:%S",
 			  gmtime ((time_t *) & pair->lvalue));
 		strncpy(value, buffer, lv-1);
+		break;
+
+	    case PW_TYPE_IPV6PREFIX:
+		memset (in6ad.s6_addr, 0, sizeof (in6ad.s6_addr));
+		if (pair->lvalue-2 > sizeof (in6ad.s6_addr))
+		{
+			error("rc_avpair_tostr: attribute value is too long (%d bytes)", pair->lvalue);
+			return (-1);
+		}
+		memcpy (in6ad.s6_addr, pair->strvalue + 2, pair->lvalue - 2);
+		if (!inet_ntop (AF_INET6, &in6ad, buffer, sizeof (buffer)))
+		{
+			error("rc_avpair_tostr: inet_ntop failed (no IPv6 support?)");
+			return (-1);
+		}
+		strncpy (value, buffer, (size_t) lv-1);
+		lv -= strlen(buffer);
+		if ((unsigned int) pair->strvalue[1] > 128)
+		{
+			error("rc_avpair_tostr: invalid IPv6 prefix length: %d", (unsigned int) pair->strvalue[1]);
+			return (-1);
+		}
+		sprintf (buffer, "/%d", (unsigned int) pair->strvalue[1]);
+		strncat (value, buffer, (size_t) lv-1);
 		break;
 
 	    default:

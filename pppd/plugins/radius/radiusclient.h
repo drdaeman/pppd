@@ -77,6 +77,7 @@ typedef struct pw_auth_hdr
 #define PW_TYPE_INTEGER			1
 #define PW_TYPE_IPADDR			2
 #define PW_TYPE_DATE			3
+#define PW_TYPE_IPV6PREFIX		8
 
 /* standard RADIUS codes */
 
